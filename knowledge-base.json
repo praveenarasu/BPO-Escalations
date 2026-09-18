@@ -1,0 +1,22 @@
+{
+  "name": "BPO-Escalations Excel analysis",
+  "source_tabs": ["Query data", "Non-callable payer List"],
+  "output_columns": {
+    "Recommended action": {"fill": "yellow", "header_fill": "dark blue"},
+    "Rework marker": {"fill": "light green", "header_fill": "dark blue"},
+    "Possible paper drop": {"fill": "grey", "header_fill": "dark blue"}
+  },
+  "approved_kick_codes": ["ACSRULERVW", "AGECPTMATCH", "AGEDXMATCH", "AMCSACODERVW", "AMCSCCODERVW", "AMCSGCODERVW", "AMCSOCODERVW", "ATHCODERULERVW", "ATHCODERVW", "ATHCODEXFR", "CBOCODERVW", "CODINGRVW", "CPT", "DIAGNOSIS", "DMCODINGCHANGE", "DMCODINGRVW", "DRGCODE", "DXCPTMATCH", "GENDERCPTMATCH", "GENDERDXMATCH", "LCDNCD", "MODCPTMATCH", "MODIFIER", "NDCHCPCROSSWALK", "NEWPATIENT", "POS", "POSCPTMATCH", "PRINCPLPROC", "PTREASON4VISIT", "RECODEOVERRIDE", "RECODERVW", "REVCODE", "REVCPTMATCH", "TOB", "TOBREVCODEMATCH", "TOBVALCODEMATCH"],
+  "recommended_action": {
+    "group_key": "CLAIMID",
+    "coding_change_test": "CODING_CHANGES_PRESENT=Yes OR CODING_CHANGES_FIELDS has a value OR VOIDED_PROCEDURECODE has a value OR CREATED_PROCEDURECODE has a value",
+    "condition_1": "For ERA_EOB_POSTED=Yes use ERA_EOB_CODE_PAIRS; for No use the six rejection/previous-action columns. If an approved code is found and coding_change_test is true, output DRPCBOAPPROVE.",
+    "condition_2": "If an approved code is found and coding_change_test is false, use INFLOW_QUEUE_COUNT. At 0, output one approved source code.",
+    "condition_2_exceptions": ["ERA_EOB_CODE_PAIRS containing CO204:NCPREVIEW outputs CODINGRVW", "PREVIOUS_KICKCODETOINFLOW_REMARKCODES ending in 507 plus IRC_GROUP_NAME starting with Medicare outputs CODINGRVW"],
+    "condition_3": "Condition 2 with INFLOW_QUEUE_COUNT=1 outputs CODINGRVW.",
+    "condition_4": "Condition 2 with INFLOW_QUEUE_COUNT=2 outputs MANAGER.",
+    "fallback": "COMPLEX"
+  },
+  "possible_paper_drop": "When ERA_EOB_POSTED=No and IRC_GROUP_NAME contains Blue or Commercial, output Yes.",
+  "rework_marker": "Output Yes when ERA_EOB_POSTED=Yes, INSURANCEREPORTINGCATEGORYNAME is absent from Non-callable payer List.IRC, and USERNOTES_AFTER_INFLOW contains coded correctly or reach payer."
+}

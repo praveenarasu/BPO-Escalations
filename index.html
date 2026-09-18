@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BPO Escalations Knowledge Base</title>
+  <meta name="description" content="Rules for analysing BPO Escalations Excel workbooks and creating the formatted output workbook.">
+  <style>
+    :root {
+      color-scheme: light;
+      --blue: #123b68;
+      --ink: #1f2937;
+      --muted: #5b6472;
+      --surface: #f6f8fb;
+      --line: #d8dee8;
+    }
+    body {
+      margin: 0;
+      background: var(--surface);
+      color: var(--ink);
+      font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 980px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+    header { background: var(--blue); color: white; padding: 2rem; border-radius: 12px; }
+    h1, h2, h3 { line-height: 1.2; }
+    h1 { margin-top: 0; }
+    section {
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-top: 1rem;
+      padding: 1.25rem 1.5rem;
+    }
+    code, pre { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    code { background: #eef2f7; padding: .1rem .3rem; border-radius: 4px; }
+    pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+    li { margin: .3rem 0; }
+    .rule { border-left: 4px solid var(--blue); padding-left: 1rem; }
+    .muted { color: var(--muted); }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>BPO Escalations Knowledge Base</h1>
+    <p>Authoritative instructions for analysing an uploaded Excel workbook and producing a new, formatted Excel workbook.</p>
+  </header>
+
+  <section>
+    <h2>Workbook and output requirements</h2>
+    <ul>
+      <li>The source workbook has two tabs: <code>Query data</code> and <code>Non-callable payer List</code>.</li>
+      <li>Preserve the original data and add these columns to the output: <code>Recommended action</code>, <code>Rework marker</code>, and <code>Possible paper drop</code>.</li>
+      <li>Use a dark blue header for all three new columns. Fill <code>Recommended action</code> yellow, <code>Rework marker</code> light green, and <code>Possible paper drop</code> grey.</li>
+      <li>Evaluate the rules below per <code>CLAIMID</code>. Values containing a code may be delimited; match approved codes as codes, not as arbitrary substrings.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Approved kick code list</h2>
+    <p><code>ACSRULERVW, AGECPTMATCH, AGEDXMATCH, AMCSACODERVW, AMCSCCODERVW, AMCSGCODERVW, AMCSOCODERVW, ATHCODERULERVW, ATHCODERVW, ATHCODEXFR, CBOCODERVW, CODINGRVW, CPT, DIAGNOSIS, DMCODINGCHANGE, DMCODINGRVW, DRGCODE, DXCPTMATCH, GENDERCPTMATCH, GENDERDXMATCH, LCDNCD, MODCPTMATCH, MODIFIER, NDCHCPCROSSWALK, NEWPATIENT, POS, POSCPTMATCH, PRINCPLPROC, PTREASON4VISIT, RECODEOVERRIDE, RECODERVW, REVCODE, REVCPTMATCH, TOB, TOBREVCODEMATCH, TOBVALCODEMATCH</code></p>
+    <p>Only these codes may be selected by the recommendation logic. The values <code>DRPCBOAPPROVE</code>, <code>MANAGER</code>, and <code>COMPLEX</code> are rule outcomes and are also valid output values.</p>
+  </section>
+
+  <section>
+    <h2>Recommended action</h2>
+    <p>Apply the following rules in order for each <code>CLAIMID</code>. The first applicable result wins.</p>
+    <div class="rule">
+      <h3>Condition 1: coding changes require approval</h3>
+      <p>If <code>ERA_EOB_POSTED = Yes</code>, inspect <code>ERA_EOB_CODE_PAIRS</code>. If it contains an approved kick code, continue. If <code>CODING_CHANGES_PRESENT = Yes</code>, or <code>CODING_CHANGES_FIELDS</code> has a value, or either <code>VOIDED_PROCEDURECODE</code> or <code>CREATED_PROCEDURECODE</code> has a value, set <code>Recommended action = DRPCBOAPPROVE</code>.</p>
+      <p>If <code>ERA_EOB_POSTED = No</code>, inspect <code>REJECTION_YN</code> and these columns: <code>REJECTION_KICKCODE</code>, <code>REJECTION_ATHENAKICKCODE</code>, <code>PREVIOUS_ACTIONTOINFLOW</code>, <code>PREVIOUS_ATHENAKICKCODETOINFLOW</code>, <code>PREVIOUS_KICKCODETOINFLOW_</code>, and <code>PREVIOUS_KICKCODETOINFLOW_REMARKCODES</code>. If any contains an approved kick code and the same coding-change test is true, set <code>DRPCBOAPPROVE</code>.</p>
+    </div>
+    <div class="rule">
+      <h3>Condition 2: no coding change</h3>
+      <p>Use the same ERA/EOB or rejection-code selection above. If the coding-change test is false (coding changes are not present, coding-change fields are empty, and both procedure-code fields are empty), inspect <code>INFLOW_QUEUE_COUNT</code>. When it is <code>0</code>, recommend one approved code from the applicable source column.</p>
+      <p>Exception: if <code>ERA_EOB_CODE_PAIRS</code> contains <code>CO204:NCPREVIEW</code>, recommend <code>CODINGRVW</code>. If <code>PREVIOUS_KICKCODETOINFLOW_REMARKCODES</code> contains a code ending in <code>507</code> and <code>IRC_GROUP_NAME</code> starts with <code>Medicare</code>, recommend <code>CODINGRVW</code>.</p>
+    </div>
+    <div class="rule">
+      <h3>Conditions 3 and 4</h3>
+      <p>Apply Condition 1, then Condition 2 if Condition 1 does not qualify. For Condition 3, an otherwise eligible <code>INFLOW_QUEUE_COUNT = 1</code> produces <code>CODINGRVW</code>. For Condition 4, an otherwise eligible <code>INFLOW_QUEUE_COUNT = 2</code> produces <code>MANAGER</code>.</p>
+    </div>
+    <p><strong>Final fallback:</strong> if no condition applies, set <code>Recommended action = COMPLEX</code>.</p>
+  </section>
+
+  <section>
+    <h2>Possible paper drop</h2>
+    <p>For each claim, check <code>ERA_EOB_POSTED</code>. When it is <code>No</code>, apply the rejection logic described for Recommended action. Then inspect <code>IRC_GROUP_NAME</code>. If it contains <code>Blue</code> or <code>Commercial</code>, set <code>Possible paper drop = Yes</code>. Otherwise leave it blank or use the workbook's established false-value convention.</p>
+  </section>
+
+  <section>
+    <h2>Rework marker</h2>
+    <p>Set <code>Rework marker = Yes</code> only when all three conditions are true:</p>
+    <ol>
+      <li><code>ERA_EOB_POSTED = Yes</code>.</li>
+      <li>The <code>INSURANCEREPORTINGCATEGORYNAME</code> value in <code>Query data</code> does not exist in the <code>IRC</code> column of <code>Non-callable payer List</code>.</li>
+      <li><code>USERNOTES_AFTER_INFLOW</code> contains either <code>coded correctly</code> or <code>reach payer</code> (case-insensitive).</li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Agent implementation guidance</h2>
+    <p>Keep source values intact, treat blank and missing values as no value, compare Yes/No values case-insensitively, and preserve the original tab names. Do not invent kick codes. When multiple approved codes are available, select the first one in source-column order and preserve the source order within a cell unless an exception overrides it.</p>
+    <p class="muted">This page is the deployable knowledge source for the BPO-Escalations agent.</p>
+  </section>
+</main>
+</body>
+</html>
